@@ -51,7 +51,7 @@
     (inlinetask . org-bb-undefined)
     (inner-template . org-bb-inner-template)
     (italic . org-bb-italic)
-    (item . org-bb-item)
+    (item . org-bb-list-item)
     ;;(keyword . org-bb-undefined)
     (latex-environment . org-bb-undefined)
     (latex-fragment . org-bb-undefined)
@@ -107,16 +107,14 @@
   "Format TEXT as a headline of the given LEVEL."
   (let ((indent (cl-case level
 		  (0 "")
-		  (1 "# ")
-		  (2 "== ")
-		  (3 "+++ ")
-		  (4 ":::: ")
-		  (5 "----- ")
+		  (1 (org-bb--put-in-tag "h1" text))
+		  (2 (org-bb--put-in-tag "h2" text))
+		  (3 (org-bb--put-in-tag "h3" text))
+		  (4 (org-bb--put-in-tag "h4" text))
+		  (5 (org-bb--put-in-tag "h5" text))
 		  (t (error "Headline level `%s' is not defined yet" level)))))
     (concat
-     (org-bb--put-in-tag
-      "b" (org-bb--put-in-tag
-	   "u" (concat indent text)))
+     indent
      "\n\n")))
 
 (defun org-bb--put-in-tag (tag contents &optional attributes)
@@ -264,6 +262,10 @@ CONTENTS is the italic text, as a string.  INFO is
   a plist used as a communication channel."
   (org-bb--put-in-tag "i" contents))
 
+(defun org-bb-list-item (item contents info)
+  "Transcode a LIST ITEM from Org to BBCode."
+  (org-bb--put-in-tag "li" contents))
+
 (defun org-bb-item (item contents info)
   "Transcode a ITEM element from Org to BBCode.
 CONTENTS is the contents of the item, as a string.  INFO is
@@ -321,9 +323,8 @@ CONTENTS is the contents of the plain-list, as a string.  INFO is
 	(content-block (org-bb--as-block (org-trim contents))))
     (concat
      (pcase type
-       (`descriptive (org-bb--put-in-tag "list" content-block))
-       (`unordered (org-bb--put-in-tag "list" content-block))
-       (`ordered (org-bb--put-in-value-tag "list" content-block "1"))
+       (`unordered (org-bb--put-in-tag "ul" content-block))
+       (`ordered (org-bb--put-in-tag "ol" content-block))
        (other (error "PLAIN-LIST type `%s' not yet supported" other)))
      "\n")))
 
