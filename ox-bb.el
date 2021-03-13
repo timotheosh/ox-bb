@@ -22,11 +22,25 @@
 ;; URL: https://github.com/mmitch/ox-bb
 ;; Keywords: bbcode, org, export, outlines
 ;; Version: 0.0.1
-;; Package-Requires: ((emacs "24.3") (org "8.0"))
+;; Package-Requires: ((emacs "24.4") (org "8.0"))
 
 ;;; Commentary:
 
-;; export Org documents to BBCode
+;; This library implements a BBCode back-end for Org exporter.  Source
+;; code snippets are exported for the GeSHi plugin.
+;;
+;; ox-bb provides three different commands for export:
+;;
+;; - `ox-bb-export-as-bbcode' exports to a buffer named "*Org BBCode
+;;   Export*" and automatically applies `bbcode-mode' if it is
+;;   available.
+;;
+;; - `ox-bb-export-to-kill-ring' does the same and additionally copies
+;;   the exported buffer to the kill ring so that the generated BBCode
+;;   is available in the Clipboard.
+;;
+;; - `ox-bb-export-to-bbcode' exports to a file with extension
+;;   ".bbcode".
 
 ;;; Code:
 
@@ -34,8 +48,8 @@
 
 ;;; Backend definition
 
-; internal reminder: for Org format information see
-; http://orgmode.org/worg/dev/org-element-api.html
+					; internal reminder: for Org format information see
+					; https://orgmode.org/worg/dev/org-element-api.html
 
 (org-export-define-backend 'bb
   '((bold . ox-bb-bold)
@@ -95,6 +109,9 @@
 
 ;;; Helper methods
 
+;; prevent bogus byte-compiler warning
+(declare-function bbcode-mode "bbcode-mode" ())
+
 (defun ox-bb--as-block (text)
   "Format TEXT as a block with leading and trailing newline."
   (concat "\n" text "\n"))
@@ -112,7 +129,7 @@
 		  (3 "+++ ")
 		  (4 ":::: ")
 		  (5 "----- ")
-		  (t (error "Headline level `%s' is not defined yet" level)))))
+		  (t (user-error "Headline level `%s' is not defined yet" level)))))
     (concat
      (ox-bb--put-in-tag
       "b" (ox-bb--put-in-tag
@@ -205,13 +222,13 @@ contextual information."
   "Transcode a FIXED-WIDTH element from Org to BBCode.
 CONTENTS is nil.  INFO is a plist holding contextual information."
   (ox-bb--put-in-tag "code"
-		      (concat "\n" (org-element-property :value fixed-width))))
+		     (concat "\n" (org-element-property :value fixed-width))))
 
 (defun ox-bb-footnote-reference (footnote-reference _contents info)
   "Transcode a FOOTNOTE-REFERENCE element from Org to BBCode.
 CONTENTS is nil.  INFO is a plist holding contextual information."
   (if (eq (org-element-property :type footnote-reference) 'inline)
-      (error "Inline footnotes not supported yet")
+      (user-error "Inline footnotes not supported yet")
     (let ((n (org-export-get-footnote-number footnote-reference info)))
       (format "^%d " n))))
 
@@ -233,7 +250,7 @@ INFO is a plist used as a communication channel."
 	 (fn-alist
 	  (cl-loop for (n _label raw) in fn-alist collect
 		   (cons n (org-trim (org-export-data raw info)))))
-	 (text (mapconcat 'ox-bb-format-footnote-definition fn-alist "\n")))
+	 (text (mapconcat #'ox-bb-format-footnote-definition fn-alist "\n")))
     (if fn-alist
 	(concat "\n" (ox-bb--format-headline "Footnotes" 0) text)
       "")))
@@ -279,8 +296,7 @@ CONTENTS is the contents of the item, as a string.  INFO is
 		      (and tag (org-export-data tag info)))))
 	  (concat
 	   (ox-bb--put-in-tag "i" (concat (org-trim term) ":"))
-	   " "
-	   ))))
+	   " "))))
      text
      "\n")))
 
@@ -302,10 +318,10 @@ CONTENTS is the contents of the link, as a string.  INFO is
       (cond
        ((string-prefix-p "about:" raw)
 	(ox-bb--put-url contents raw))
-       (t (error "Unknown fuzzy LINK type encountered: `%s'" raw))))
+       (t (user-error "Unknown fuzzy LINK type encountered: `%s'" raw))))
      ((member type '("http" "https"))
       (ox-bb--put-url contents (concat type ":" path)))
-     (t (error "LINK type `%s' not yet supported" type)))))
+     (t (user-error "LINK type `%s' not yet supported" type)))))
 
 (defun ox-bb-paragraph (_paragraph contents _info)
   "Transcode a PARAGRAPH element from Org to BBCode.
@@ -324,7 +340,7 @@ CONTENTS is the contents of the plain-list, as a string.  INFO is
        (`descriptive (ox-bb--put-in-tag "list" content-block))
        (`unordered (ox-bb--put-in-tag "list" content-block))
        (`ordered (ox-bb--put-in-value-tag "list" content-block "1"))
-       (other (error "PLAIN-LIST type `%s' not yet supported" other)))
+       (other (user-error "PLAIN-LIST type `%s' not yet supported" other)))
      "\n")))
 
 (defun ox-bb-plain-text (text _info)
@@ -378,7 +394,7 @@ holding export options."
 
 (defun ox-bb-undefined (element &optional _contents _info)
   "Throw an error when an unsupported ELEMENT is encountered."
-  (error "ELEMENT type `%s' not implemented yet" (car element)))
+  (user-error "ELEMENT type `%s' not implemented yet" (car element)))
 
 (defun ox-bb-underline (_underline contents _info)
   "Transcode a UNDERLINE element from Org to BBCode.
@@ -395,7 +411,7 @@ CONTENTS is nil.  INFO is a plist used as a communication channel."
 
 ;;;###autoload
 (defun ox-bb-export-as-bbcode
-  (&optional async subtreep visible-only body-only ext-plist)
+    (&optional async subtreep visible-only body-only ext-plist)
   "Export current buffer to a BBCode buffer.
 
 If narrowing is active in the current buffer, only export its
@@ -420,7 +436,8 @@ EXT-PLIST, when provided, is a property list with external
 parameters overriding Org default settings, but still inferior to
 file-local settings.
 
-Export is done in a buffer named \"*Org BBCode Export*\"."
+Export is done in a buffer named \"*Org BBCode Export*\".  If
+available, `bbcode-mode' is enabled in the buffer."
   (interactive)
   (org-export-to-buffer 'bb "*Org BBCode Export*"
     async subtreep visible-only body-only ext-plist
@@ -428,7 +445,7 @@ Export is done in a buffer named \"*Org BBCode Export*\"."
 
 ;;;###autoload
 (defun ox-bb-export-to-bbcode
-  (&optional async subtreep visible-only body-only ext-plist)
+    (&optional async subtreep visible-only body-only ext-plist)
   "Export current buffer to a BBCode file.
 
 If narrowing is active in the current buffer, only export its
@@ -463,7 +480,7 @@ Return output file's name."
 
 ;;;###autoload
 (defun ox-bb-export-to-kill-ring
-  (&optional async subtreep visible-only body-only ext-plist)
+    (&optional async subtreep visible-only body-only ext-plist)
   "Export current buffer to a BBCode buffer and kill ring.
 
 If narrowing is active in the current buffer, only export its
